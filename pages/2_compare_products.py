@@ -1,134 +1,218 @@
 import streamlit as st
 import requests
 import pandas as pd
-from PIL import Image, ImageDraw
+from PIL import Image
 from io import BytesIO
-import os
-
 
 st.set_page_config(page_title="Catálogo P360", layout="wide")
-st.title("Comparação de Produtos")
+
 # Verifica se os itens foram carregados na sessão
 items = st.session_state.get("items", [])
-
 if not items:
     st.warning("Nenhum item carregado. Volte à página principal e faça login.")
     st.stop()
 
-# Criar lista de nomes para o selectbox
-#item_names = [item["nome"] for item in items]
-item_names = [item["nome"] for item in items if item["nome"]]
+# Limpa os nomes (remove nulos e vazios)
+item_names = [
+    item["nome"].strip()
+    for item in items
+    if item["nome"] and item["nome"].strip()
+]
+segmento_escolhido = 'Smartphones'
+items_filtrados = [
+    item for item in items
+    if item['segmento'] == segmento_escolhido
+]
+# Inicializa quantidade de itens selecionáveis
+if "compare_count" not in st.session_state:
+    st.session_state.compare_count = 2  # começa com 2 itens
 
-col1, col2 = st.columns(2)
+# -----------------------------
+# Botões para adicionar / remover
+# -----------------------------
+colAdd, colRemove = st.columns([1, 1])
 
-with col1:
-    item1_name = st.selectbox("Selecione o 1º produto", [""] + item_names)
-with col2:
-    item2_name = st.selectbox("Selecione o 2º produto", [""] + item_names)
+with colAdd:
+    if st.button("➕ Adicionar item"):
+        if st.session_state.compare_count < 4:
+            st.session_state.compare_count += 1
 
-# Obter os itens selecionados
-item1 = next((i for i in items if i["nome"] == item1_name), None)
-item2 = next((i for i in items if i["nome"] == item2_name), None)
-TARGET_SIZE = (350, 350)
+with colRemove:
+    if st.button("➖ Remover item"):
+        if st.session_state.compare_count > 2:
+            st.session_state.compare_count -= 1
 
-# Apenas mostra o botão se ambos forem escolhidos
-if item1 and item2:
-    if st.button("Comparar"):
-        
-        #st.subheader(f"**{item1['nome']}** VS **{item2['nome']}**")
-        try:
-            # Pega a imagem da URL
-            response1 = requests.get(item1['image'])
-            img1 = Image.open(BytesIO(response1.content))
-            img1 = img1.resize(TARGET_SIZE)
-            with col1:
-                st.image(img1, caption="Imagem do Produto", use_container_width =False)
-                st.subheader(f"{item1['nome']}")
-            response2 = requests.get(item2['image'])
-            img2 = Image.open(BytesIO(response2.content))
-            img2 = img2.resize(TARGET_SIZE)
-            with col2:
-                st.image(img2, caption="Imagem do Produto", use_container_width =False)
-                st.subheader(f"{item2['nome']}")
-        except:
-            # Se a URL estiver quebrada, cria placeholder
-            img = Image.new("RGB", TARGET_SIZE, color=(200, 200, 200))
-            st.image(img, caption="Sem Imagem", use_container_width=False)
-        
-        # Tabela comparativa simples
-        df_comp = pd.DataFrame({
-            "Atributo": ["Nome", "Marca", "Segmento", "Preço"],
-            item1["nome"]: [item1["nome"], item1["brand"], item1["segmento"], item1["preco"]],
-            item2["nome"]: [item2["nome"], item2["brand"], item2["segmento"], item2["preco"]],
-        })
+selected_items = []
 
-        #st.table(df_comp)
-        html = df_comp.to_html(
+st.subheader("Selecione os itens:")
+
+for i in range(st.session_state.compare_count):
+    item_name = st.selectbox(
+        f"Item {i+1}",
+        [""] + item_names,
+        key=f"compare_select_{i}"
+    )
+    selected_items.append(item_name)
+
+if st.button("Comparar"):
+    valid_items = [name for name in selected_items if name]
+
+    if len(valid_items) < 2:
+        st.error("Selecione pelo menos 2 itens.")
+        st.stop()
+
+    selected_objects = [
+        next((i for i in items if i["nome"] == name), None)
+        for name in valid_items
+    ]
+
+    cols = st.columns(len(selected_objects))
+    TARGET_SIZE = (350, 350)
+
+    for idx, (col, obj) in enumerate(zip(cols, selected_objects)):
+        with col:
+            try:
+                response = requests.get(obj["image"])
+                img = Image.open(BytesIO(response.content)).resize(TARGET_SIZE)
+            except:
+                img = Image.new("RGB", TARGET_SIZE, color=(200, 200, 200))
+
+            st.image(img, caption=obj["nome"], use_container_width=False)
+
+    st.subheader("Informações Gerais")
+
+    df_comp = pd.DataFrame({
+        "Atributo": ["Nome", "Marca", "Segmento", "Preço"]
+    })
+
+    for obj in selected_objects:
+        df_comp[obj["nome"]] = [
+            obj["nome"],
+            obj["brand"],
+            obj["segmento"],
+            obj["preco"],
+        ]
+
+    # Renderiza HTML
+    html = df_comp.to_html(
         index=False,
         header=False,
         border=0,
-        classes="p360-table"
-        )
+        classes="comparison-table"
+    )
 
-        st.markdown(
-                """
-                <style>
-                    .p360-table {
-                        border-collapse: collapse;
-                        width: 100%;
-                        font-size: 14px;
-                    }
-                    .p360-table td {
-                        padding: 4px 6px;
-                        border: none !important;
-                    }
-                    .p360-table th {
-                        display: none; /* garante que headers sumam */
-                    }
-                </style>
-                """,
-                unsafe_allow_html=True
-            )
-        st.markdown(html, unsafe_allow_html=True)
-        st.divider()
+    st.markdown(
+        """
+        <style>
+            .comparison-table {
+                border-collapse: separate;
+                border-spacing: 0;
+                width: 100%;
+                font-size: 15px;
+            }
+            .comparison-table tr:nth-child(odd) {
+                background-color: #323542;
+            }
+            .comparison-table tr:nth-child(even) {
+                background-color: #323542;
+            }
+            .comparison-table td {
+                padding: 8px 10px;
+                border-bottom: 1px solid #e0e0e0;
+            }
+            .comparison-table td:first-child {
+                font-weight: bold;
+                background-color: #323542;
+                width: 25%;
+            }
+            .comparison-table th {
+                display: none;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
-        # Comparação das tabelas de atributos internas
-        st.subheader("**Atributos:**")
+    st.markdown(html, unsafe_allow_html=True)
+    st.divider()
+    st.subheader("Atributos Internos")
 
-        # Mescla atributos dos dois itens
-        df1 = item1["attributes_df"].rename(columns={"Valor": item1["nome"]})
-        df2 = item2["attributes_df"].rename(columns={"Valor": item2["nome"]})
+    # base para merge
+    df_merge = None
+    for obj in selected_objects:
+        df_attr = obj["attributes_df"].rename(columns={"Valor": obj["nome"]})
+        if df_merge is None:
+            df_merge = df_attr
+        else:
+            df_merge = pd.merge(df_merge, df_attr, on="Atributo", how="outer")
 
-        # Mescla pela coluna "Atributo"
-        df_merge = pd.merge(df1, df2, on="Atributo", how="outer")
-
-        #st.dataframe(df_merge)
-        html = df_merge.to_html(
+    html = df_merge.to_html(
         index=False,
         header=False,
         border=0,
-        classes="p360-table"
-        )
+        classes="comparison-attributes"
+    )
 
-        st.markdown(
-                """
-                <style>
-                    .p360-table {
-                        border-collapse: collapse;
-                        width: 100%;
-                        font-size: 16px;
-                        background-color: #323542;
-                    }
-                    .p360-table td {
-                        padding: 4px 6px;
-                        border: 1px !important;
-                    }
-                    .p360-table th {
-                        display: none; /* garante que headers sumam */
-                    }
-                </style>
-                """,
-                unsafe_allow_html=True
-            )
-        st.markdown(html, unsafe_allow_html=True)
-        st.divider()
+    st.markdown(
+        """
+        <style>
+            .comparison-attributes {
+                border-collapse: separate;
+                border-spacing: 0;
+                width: 100%;
+                font-size: 15px;
+            }
+            .comparison-attributes tr:nth-child(odd) {
+                background-color: #323542;
+            }
+            .comparison-attributes tr:nth-child(even) {
+                background-color: #323542;
+            }
+            .comparison-attributes td {
+                padding: 6px 8px;
+                border-bottom: 1px solid #ddd;
+            }
+            .comparison-attributes td:first-child {
+                font-weight: bold;
+                background-color: #323542;
+                width: 25%;
+            }
+            .comparison-attributes th {
+                display: none;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    st.markdown(html, unsafe_allow_html=True)
+    st.divider()
+
+    st.title("Produtos relacionados:")
+
+    cols = st.columns(4)
+    for i, item in enumerate(items_filtrados):
+        with cols[i % 4]:
+            st.text(f"{item['nome']}")
+            st.text(f"Segmento: {item['segmento']}") # Exibe o segmento
+            url=item['image']
+            TARGET_SIZE = (350, 350) 
+            if url:
+                try:
+                    # Pega a imagem da URL
+                    response = requests.get(url)
+                    img = Image.open(BytesIO(response.content))
+                    # Reduz o tamanho em 40%
+                    new_width = int(img.width * 0.6)
+                    new_height = int(img.height * 0.6)
+                    img = img.resize(TARGET_SIZE)
+                    st.image(img, caption="Imagem do Produto", use_container_width =False)
+                except:
+                    # Se a URL estiver quebrada, cria placeholder
+                    img = Image.new("RGB", TARGET_SIZE, color=(200, 200, 200))
+                    st.image(img, caption="Sem Imagem", use_container_width=False)
+            else:
+                # Placeholder cinza
+                img = Image.new("RGB", TARGET_SIZE, color=(200, 200, 200))
+                st.image(img, caption="Sem Imagem", use_container_width=False)         
+            st.write(f"**Preço:** R$ {item['preco']}")
+            st.divider()

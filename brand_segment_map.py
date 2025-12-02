@@ -1,6 +1,9 @@
 # Mapeamento de Marca para Segmento (baseado na análise anterior)
 BRAND_SEGMENT_MAP = {
     "Apple": "Tecnologia",
+    "Samsung":"Tecnologia",
+    "Apple": "Smartphones",
+    "Samsung":"Smartphones",
     "Milka": "Alimentos",
     "DISNEY - HYPERION BOOKS": "Editorial",
     "AUDIBLE": "Editorial",
