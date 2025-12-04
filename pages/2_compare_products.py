@@ -8,6 +8,9 @@ st.set_page_config(page_title="Catálogo P360", layout="wide")
 
 # Verifica se os itens foram carregados na sessão
 items = st.session_state.get("items", [])
+
+session = st.session_state['session']
+
 if not items:
     st.warning("Nenhum item carregado. Volte à página principal e faça login.")
     st.stop()
@@ -72,13 +75,11 @@ if st.button("Comparar"):
     for idx, (col, obj) in enumerate(zip(cols, selected_objects)):
         with col:
             try:
-                response = requests.get(obj["image"])
+                response = session.get(obj["image"])
                 img = Image.open(BytesIO(response.content)).resize(TARGET_SIZE)
             except:
                 img = Image.new("RGB", TARGET_SIZE, color=(200, 200, 200))
-
             st.image(img, caption=obj["nome"], use_container_width=False)
-
     st.subheader("Informações Gerais")
 
     df_comp = pd.DataFrame({
@@ -141,10 +142,16 @@ if st.button("Comparar"):
     df_merge = None
     for obj in selected_objects:
         df_attr = obj["attributes_df"].rename(columns={"Valor": obj["nome"]})
+        df_attr[obj["nome"]] = df_attr[obj["nome"]].fillna("-")
+        df_attr[obj["nome"]] = df_attr[obj["nome"]].replace("", "-", regex=False)
         if df_merge is None:
             df_merge = df_attr
         else:
             df_merge = pd.merge(df_merge, df_attr, on="Atributo", how="outer")
+    if df_merge is not None:
+        df_merge = df_merge.fillna("-")
+    if df_merge is not None:
+        df_merge = df_merge.replace("", "-", regex=False)
 
     html = df_merge.to_html(
         index=False,
@@ -199,11 +206,9 @@ if st.button("Comparar"):
             if url:
                 try:
                     # Pega a imagem da URL
-                    response = requests.get(url)
+                    response = session.get(url, stream=True)
+                    #response = requests.get(url)
                     img = Image.open(BytesIO(response.content))
-                    # Reduz o tamanho em 40%
-                    new_width = int(img.width * 0.6)
-                    new_height = int(img.height * 0.6)
                     img = img.resize(TARGET_SIZE)
                     st.image(img, caption="Imagem do Produto", use_container_width =False)
                 except:

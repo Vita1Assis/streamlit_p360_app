@@ -70,9 +70,14 @@ def get_p360_items(session_id):
         "filters": {
             "filter": [
                 {
-                "comparator": "GREATER_THAN",
-                "fieldName": "p360item.sellingPrice.sellingPriceAmount",
-                "fieldValue": "0"
+                    "comparator": "GREATER_THAN",
+                    "fieldName": "p360item.sellingPrice.sellingPriceAmount",
+                    "fieldValue": "0"
+                },
+                {
+                    "comparator": "EQUALS",
+                    "fieldName": "p360item.X_ownership_type",
+                    "fieldValue": "1P"
                 }
             ]
         }
@@ -224,6 +229,7 @@ if load_button:
 # EXIBIÇÃO DOS DADOS
 # -----------------------------
 items = st.session_state.get("items", [])
+st.session_state['session'] = requests.Session()
 
 if items:
     # A coleta de marcas não é mais necessária aqui, pois o filtro de segmento está sendo usado
