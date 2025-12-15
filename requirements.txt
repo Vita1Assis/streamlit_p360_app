@@ -1,0 +1,6 @@
+pandas
+streamlit
+PIL 
+io
+os
+matplotlib
